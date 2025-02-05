@@ -141,7 +141,7 @@ class RecreationBot:
                     self.logger.info("Error popup detected, reloading page")
                     self.driver.refresh()
                     return False
-            except:
+            except Exception:
                 if self.driver.find_elements(By.XPATH, "//h1[text()='Order Details']"):
                     self.logger.info("Successfully reached checkout page")
                     return True
@@ -154,9 +154,9 @@ class RecreationBot:
         self.driver.quit()
 
 
-def main():
+if __name__ == "__main__":
     reserved = False
-    bot = RecreationBot("config.json")
+    bot = RecreationBot("rec_config.json")
     try:
         bot.login()
         time.sleep(2)
@@ -184,7 +184,3 @@ def main():
 
     finally:
         bot.close()
-
-
-if __name__ == "__main__":
-    main()
