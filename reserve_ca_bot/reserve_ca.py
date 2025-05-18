@@ -2,19 +2,42 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from pytz import timezone
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.wait import WebDriverWait
 
 
 class ReserveCABot:
-    def __init__(self, config_path, headless=False):
+    def __init__(self, config_path, credentials_dir=None, headless=False):
+        """
+        Initialize the ReserveCABot.
+
+        Args:
+            config_path (str): Path to the configuration file containing non-sensitive settings.
+            credentials_dir (str, optional): Directory containing credential files. If None, looks for
+                credentials in the same directory as config_path.
+            headless (bool, optional): Whether to run Chrome in headless mode. Defaults to False.
+        """
         self.logger = self._setup_logger()
         self.config = self._load_config(config_path)
+
+        # Handle credentials
+        if credentials_dir is None:
+            credentials_dir = Path(config_path).parent
+        else:
+            credentials_dir = Path(credentials_dir)
+
+        self.credentials = self._load_credentials(
+            credentials_dir / "reserve_ca_credentials.json"
+        )
+
         options = webdriver.ChromeOptions()
+        if headless:
+            options.add_argument("--headless")
 
         self.driver = webdriver.Chrome(options=options)
         self.driver.maximize_window()
@@ -27,8 +50,36 @@ class ReserveCABot:
         return logging.getLogger(__name__)
 
     def _load_config(self, config_path):
+        """Load non-sensitive configuration settings."""
         with open(config_path) as f:
             return json.load(f)
+
+    def _load_credentials(self, credentials_path):
+        """
+        Load sensitive credentials from a service-specific file.
+
+        Args:
+            credentials_path (Path): Path to the service-specific credentials file.
+
+        Returns:
+            dict: Credentials for the service.
+
+        Raises:
+            FileNotFoundError: If credentials file doesn't exist.
+            json.JSONDecodeError: If credentials file is invalid JSON.
+        """
+        try:
+            with open(credentials_path) as f:
+                return json.load(f)
+        except FileNotFoundError:
+            self.logger.error(
+                f"Credentials file not found at {credentials_path}. "
+                "Please create a service-specific credentials file."
+            )
+            raise
+        except json.JSONDecodeError:
+            self.logger.error(f"Invalid JSON in credentials file at {credentials_path}")
+            raise
 
     def login(self):
         try:
@@ -43,12 +94,12 @@ class ReserveCABot:
             email_field = self.wait.until(
                 EC.presence_of_element_located((By.ID, "txtEmail"))
             )
-            email_field.send_keys(self.config["username"])
+            email_field.send_keys(self.credentials["username"])
 
             password_field = self.wait.until(
                 EC.presence_of_element_located((By.ID, "txtPassword"))
             )
-            password_field.send_keys(self.config["password"])
+            password_field.send_keys(self.credentials["password"])
 
             time.sleep(2)
 

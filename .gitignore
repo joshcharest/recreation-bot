@@ -4,4 +4,4 @@ __pycache__/
 *$py.class
 
 # Credentials
-foreup_bot/credentials.json
+*credentials.json
