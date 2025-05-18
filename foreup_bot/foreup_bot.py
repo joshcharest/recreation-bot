@@ -8,7 +8,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.wait import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 
 _debug = True
@@ -306,8 +306,8 @@ if __name__ == "__main__":
     reserved = False
 
     # Wait until 1 minute before target time to login
-    target_hour = 11
-    target_minute = 29
+    target_hour = 19
+    target_minute = 0
     while True:
         current_time = datetime.now().time()
         print(f"Current time: {current_time}")
