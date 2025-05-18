@@ -240,8 +240,7 @@ class ForeUpBot:
                 "arguments[0].scrollIntoView(true);", closest_time
             )
 
-            if not _debug:
-                closest_time.click()
+            closest_time.click()
 
             # Select number of players in the booking field
             booking_player_button = self.wait.until(
@@ -277,14 +276,32 @@ class ForeUpBot:
             bool: True if booking successful, False otherwise
         """
         try:
-            # Check for confirmation page
-            if self.wait.until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, "div.booking-confirmation")
-                )
-            ):
-                self.logger.info("Successfully reached booking confirmation")
+            # Check for the specific confirmation message
+            confirmation_text = self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "h1"))
+            ).text
+
+            if confirmation_text == "Congratulations!":
+                self.logger.info("Successfully booked tee time!")
+                # Log the reservation details
+                try:
+                    date = self.driver.find_element(
+                        By.CSS_SELECTOR, "span.field:nth-child(2)"
+                    ).text
+                    time = self.driver.find_element(
+                        By.CSS_SELECTOR, "span.field:nth-child(4)"
+                    ).text
+                    players = self.driver.find_element(
+                        By.CSS_SELECTOR, "span.field:nth-child(6)"
+                    ).text
+                    self.logger.info(
+                        f"Reservation Details - Date: {date}, Time: {time}, Players: {players}"
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Could not log reservation details: {str(e)}")
                 return True
+
+            self.logger.error("Booking confirmation not found")
             return False
 
         except Exception as e:
