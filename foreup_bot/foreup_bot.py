@@ -161,7 +161,6 @@ class ForeUpBot:
             date_field.send_keys(Keys.DELETE)
 
             # Use the date string directly from config
-            self.logger.info(f"Setting date to: {self.config['target_date']}")
             date_field.send_keys(self.config["target_date"])
             date_field.send_keys(Keys.RETURN)  # Press Enter to submit the date
 
@@ -194,7 +193,6 @@ class ForeUpBot:
             )
 
             if not available_times:
-                self.logger.error("No available tee times found")
                 return False
 
             # Parse target times from config
@@ -299,6 +297,12 @@ class ForeUpBot:
 
 
 if __name__ == "__main__":
+    # Show config GUI first
+    from config_gui import ConfigGUI
+
+    gui = ConfigGUI()
+    gui.run()
+
     reserved = False
 
     # Wait until 1 minute before target time to login

@@ -1,2 +1,7 @@
-*config.json
-*credentials.json
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Credentials
+foreup_bot/credentials.json
