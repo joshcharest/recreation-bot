@@ -2,21 +2,49 @@ import json
 import logging
 import time
 from datetime import datetime
+from pathlib import Path
 
 from pytz import timezone
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from webdriver_manager.chrome import ChromeDriverManager
 
 
 class RecreationBot:
-    def __init__(self, config_path, headless=False):
+    def __init__(self, config_path, credentials_path=None, headless=False):
         self.logger = self._setup_logger()
         self.config = self._load_config(config_path)
-        options = webdriver.ChromeOptions()
 
-        self.driver = webdriver.Chrome(options=options)
+        # Handle credentials
+        if credentials_path is None:
+            credentials_path = (
+                Path(config_path).parent.parent
+                / "credentials"
+                / "recgov_credentials.json"
+            )
+        else:
+            credentials_path = Path(credentials_path)
+
+        self.credentials = self._load_config(credentials_path)
+
+        options = webdriver.ChromeOptions()
+        if headless:
+            options.add_argument("--headless=new")
+            options.add_argument("--disable-gpu")
+            options.add_argument("--no-sandbox")
+            options.add_argument("--disable-dev-shm-usage")
+
+        chromedriver_path = ChromeDriverManager().install()
+        if "THIRD_PARTY_NOTICES.chromedriver" in chromedriver_path:
+            chromedriver_path = chromedriver_path.replace(
+                "THIRD_PARTY_NOTICES.chromedriver", "chromedriver"
+            )
+
+        service = Service(chromedriver_path)
+        self.driver = webdriver.Chrome(service=service, options=options)
         self.driver.maximize_window()
         self.wait = WebDriverWait(self.driver, 60)
 
@@ -43,12 +71,12 @@ class RecreationBot:
             email_field = self.wait.until(
                 EC.presence_of_element_located((By.ID, "email"))
             )
-            email_field.send_keys(self.config["username"])
+            email_field.send_keys(self.credentials["username"])
 
             password_field = self.wait.until(
                 EC.presence_of_element_located((By.ID, "rec-acct-sign-in-password"))
             )
-            password_field.send_keys(self.config["password"])
+            password_field.send_keys(self.credentials["password"])
 
             login_submit = self.wait.until(
                 EC.element_to_be_clickable(
@@ -107,7 +135,8 @@ class RecreationBot:
                     )
                 )
             )
-            if "sarsa-button-disabled" in first_date.get_attribute("class"):
+            class_attribute = first_date.get_attribute("class")
+            if class_attribute and "sarsa-button-disabled" in class_attribute:
                 self.logger.error("No availability for selected date")
                 return False
 
@@ -156,7 +185,7 @@ class RecreationBot:
 
 if __name__ == "__main__":
     reserved = False
-    bot = RecreationBot("rec_config.json")
+    bot = RecreationBot("recgov_bot/recgov_config.json")
     try:
         bot.login()
         time.sleep(2)
