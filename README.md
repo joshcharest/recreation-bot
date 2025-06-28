@@ -74,31 +74,17 @@ Create a `recgov_bot/recgov_config.json` file:
 
 ```json
 {
-    "username": "your_email@example.com",
-    "password": "your_password",
-    "url": "recreation.gov_booking_page_url",
-    "start_date": "YYYY-MM-DD",
-    "num_people": "2",
-    "trailhead": "Trailhead Name",
-    "timezone": "America/Los_Angeles",
-    "start_time": "07:00"
+    "url": "https://www.recreation.gov/permits/445857/registration/detailed-availability?type=overnight-permit&date=2025-05-23",
+    "start_date": "2025-07-26",
+    "num_people": 5,
+    "trailhead": "Woods Creek",
+    "timezone": "US/Pacific",
+    "start_time": "7:00"
 }
 ```
 
-### ForeUp Golf Bot
+Create a `credentials/recgov_credentials.json` file:
 
-1. Create a `foreup_bot/foreup_config.json` file:
-```json
-{
-    "target_date": "MM-DD-YYYY",
-    "num_players": 4,
-    "start_time": "10:00 AM",
-    "window_start_time": "09:00 AM",
-    "window_end_time": "11:00 AM"
-}
-```
-
-2. Create a `credentials/foreup_credentials.json` file:
 ```json
 {
     "username": "your_email@example.com",
@@ -106,24 +92,51 @@ Create a `recgov_bot/recgov_config.json` file:
 }
 ```
 
-3. (Optional) Use the GUI configuration tool:
+### ForeUp Golf Bot
+
+Create a `foreup_bot/foreup_config.json` file:
+
+```json
+{
+    "target_date": "05-25-2025",
+    "num_players": 3,
+    "start_time": "10:00 AM",
+    "window_start_time": "09:00 AM",
+    "window_end_time": "12:00 PM"
+}
+```
+
+Create a `credentials/sdgolf_credentials.json` file:
+
+```json
+{
+    "username": "your_email@example.com",
+    "password": "your_password"
+}
+```
+
+(Optional) Use the GUI configuration tool:
 ```bash
 python foreup_bot/config_gui.py
 ```
 
 ### ReserveCA Bot
 
-1. Create a `reserve_ca_bot/res_ca_config.json` file:
+Create a `reserve_ca_bot/res_ca_config.json` file:
+
 ```json
 {
-    "url": "https://www.reservecalifornia.com/Web/",
-    "start_date": "YYYY-MM-DD",
-    "end_date": "YYYY-MM-DD",
-    "campsite": "Campsite Name"
+    "url": "https://www.reservecalifornia.com/Web/#!park/709/666",
+    "start_date": "2025-08-05",
+    "end_date": "2025-08-09",
+    "campsite": "Premium Campsite #145",
+    "timezone": "US/Pacific",
+    "start_time": "7:00"
 }
 ```
 
-2. Create a `credentials/reserve_ca_credentials.json` file:
+Create a `credentials/reserve_ca_credentials.json` file:
+
 ```json
 {
     "username": "your_email@example.com",
