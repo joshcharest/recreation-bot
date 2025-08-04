@@ -195,12 +195,14 @@ class AWSDeployer:
                             self.logger.info(f"Added to package: {file}")
 
                 # Add Lambda handler file
-                lambda_handler_path = os.path.join(source_dir, "lambda_handler.py")
+                lambda_handler_path = os.path.join(
+                    source_dir, "aws", "lambda_handler.py"
+                )
                 if os.path.exists(lambda_handler_path):
                     zipf.write(lambda_handler_path, "lambda_handler.py")
                     self.logger.info("Added to package: lambda_handler.py")
                 else:
-                    raise Exception("lambda_handler.py not found in root directory")
+                    raise Exception("lambda_handler.py not found in aws directory")
 
                 # Add requirements.txt from parent directory
                 requirements_path = os.path.join(
@@ -209,6 +211,16 @@ class AWSDeployer:
                 if os.path.exists(requirements_path):
                     zipf.write(requirements_path, "requirements.txt")
                     self.logger.info("Added to package: requirements.txt")
+
+                # Add credentials file
+                credentials_path = os.path.join(
+                    source_dir, "config", "credentials.json"
+                )
+                if os.path.exists(credentials_path):
+                    zipf.write(credentials_path, "credentials.json")
+                    self.logger.info("Added to package: credentials.json")
+                else:
+                    self.logger.warning("Credentials file not found, Lambda may fail")
 
             # Verify the package is not empty
             if os.path.getsize(output_path) < 100:
@@ -382,6 +394,14 @@ class AWSDeployer:
             # Create Lambda package
             package_path = "foreup_monitor_lambda.zip"
             self.create_lambda_package(".", package_path)
+
+            # Note: For Selenium to work in Lambda, you'll need to:
+            # 1. Create a Lambda layer with Chrome and ChromeDriver
+            # 2. Attach the layer to the Lambda function
+            # 3. Increase Lambda timeout and memory
+            self.logger.warning(
+                "Selenium-based Lambda requires Chrome layer for full functionality"
+            )
 
             # Deploy Lambda function
             function_name = "ForeUpMonitor"
