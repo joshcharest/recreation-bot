@@ -74,6 +74,45 @@ class AWSDeployer:
             self.logger.error(f"Failed to create SNS topic: {str(e)}")
             raise
 
+    def subscribe_email_to_sns(self, topic_arn: str, email: str) -> str:
+        """Subscribe an email address to an SNS topic.
+
+        Args:
+            topic_arn: ARN of the SNS topic
+            email: Email address to subscribe
+
+        Returns:
+            Subscription ARN
+        """
+        try:
+            # Check if subscription already exists
+            try:
+                response = self.sns_client.list_subscriptions_by_topic(
+                    TopicArn=topic_arn
+                )
+                for subscription in response["Subscriptions"]:
+                    if (
+                        subscription["Protocol"] == "email"
+                        and subscription["Endpoint"] == email
+                    ):
+                        self.logger.info(
+                            f"Email subscription already exists: {subscription['SubscriptionArn']}"
+                        )
+                        return subscription["SubscriptionArn"]
+            except Exception:
+                pass
+
+            # Create the subscription
+            response = self.sns_client.subscribe(
+                TopicArn=topic_arn, Protocol="email", Endpoint=email
+            )
+            subscription_arn = response["SubscriptionArn"]
+            self.logger.info(f"Created email subscription: {subscription_arn}")
+            return subscription_arn
+        except Exception as e:
+            self.logger.error(f"Failed to create email subscription: {str(e)}")
+            raise
+
     def create_iam_role(self, role_name: str) -> str:
         """Create IAM role for Lambda execution.
 
@@ -328,6 +367,13 @@ class AWSDeployer:
             # Create SNS topic
             topic_name = f"foreup-monitoring-{config['monitoring']['aws_region']}"
             resources["sns_topic_arn"] = self.create_sns_topic(topic_name)
+
+            # Subscribe email to SNS topic if email is configured
+            if "notification_email" in config["monitoring"]:
+                email = config["monitoring"]["notification_email"]
+                resources["subscription_arn"] = self.subscribe_email_to_sns(
+                    resources["sns_topic_arn"], email
+                )
 
             # Create IAM role
             role_name = "ForeUpMonitorLambdaRole"

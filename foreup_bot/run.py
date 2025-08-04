@@ -44,7 +44,7 @@ def run_command(command, description):
 
         # Use python3 explicitly
         command = command.replace("python ", "python3 ")
-        result = subprocess.run(command, shell=True, check=True, env=env)
+        subprocess.run(command, shell=True, check=True, env=env)
         print(f"✅ {description} completed successfully!")
         return True
     except subprocess.CalledProcessError as e:
