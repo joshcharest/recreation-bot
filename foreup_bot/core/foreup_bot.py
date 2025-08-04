@@ -315,7 +315,13 @@ class ForeUpBot:
 
 if __name__ == "__main__":
     # Show config GUI first
-    from .config_gui import ConfigGUI
+    import os
+    import sys
+
+    # Add the core directory to the path for imports
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+    from config_gui import ConfigGUI
 
     gui = ConfigGUI()
     gui.run()

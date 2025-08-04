@@ -1,4 +1,5 @@
 import json
+import os
 import tkinter as tk
 from datetime import datetime
 from tkinter import ttk
@@ -58,7 +59,9 @@ class ConfigGUI:
 
         # Load existing config if it exists
         try:
-            with open("foreup_bot/foreup_config.json", "r") as f:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(script_dir, "..", "config", "foreup_config.json")
+            with open(config_path, "r") as f:
                 self.config = json.load(f)
         except:
             self.config = {
@@ -153,7 +156,11 @@ class ConfigGUI:
             "window_end_time": self.window_end_picker.get_time(),
         }
 
-        with open("foreup_bot/foreup_config.json", "w") as f:
+        # Get the script directory and construct the correct config path
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, "..", "config", "foreup_config.json")
+
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=4)
 
         self.root.destroy()  # Close the window instead of just quitting
