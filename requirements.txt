@@ -1,4 +1,6 @@
 selenium==4.18.1
 pytz>=2023.3
 webdriver-manager==4.0.1
-tkcalendar==1.6.1 
+tkcalendar==1.6.1
+boto3>=1.34.0
+requests>=2.31.0 

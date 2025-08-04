@@ -1,7 +1,68 @@
-# Python bytecode
+# Python bytecode and packages
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Credentials
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Credentials and sensitive files
 credentials/
+credentials.json
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# AWS
+*.zip
+response.json
+lambda_build/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Monitoring logs
+monitoring.log
+
+# Chrome driver cache
+.wdm/

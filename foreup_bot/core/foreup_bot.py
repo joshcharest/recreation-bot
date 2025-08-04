@@ -315,7 +315,7 @@ class ForeUpBot:
 
 if __name__ == "__main__":
     # Show config GUI first
-    from config_gui import ConfigGUI
+    from .config_gui import ConfigGUI
 
     gui = ConfigGUI()
     gui.run()
@@ -346,7 +346,7 @@ if __name__ == "__main__":
             break
 
     # Launch browser and login
-    bot = ForeUpBot("foreup_bot/foreup_config.json", "foreup_bot/credentials.json")
+    bot = ForeUpBot("../config/foreup_config.json", "../config/credentials.json")
     try:
         # Login first
         bot.login()
