@@ -46,10 +46,11 @@ def main():
             f"Check interval: {config['monitoring']['check_interval_minutes']} minutes"
         )
 
-        # Initialize monitor
+        # Initialize monitor (non-headless for local monitoring)
         monitor = ForeUpMonitor(
             config_path=config_path,
             credentials_path=credentials_path,
+            headless=False,  # Show browser window for local monitoring
         )
 
         # Run a single check first

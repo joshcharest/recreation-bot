@@ -3,7 +3,7 @@
     "num_players": 4,
     "start_time": "10:00 AM",
     "window_start_time": "08:00 AM",
-    "window_end_time": "11:00 AM",
+    "window_end_time": "11:00 PM",
     "monitoring": {
         "aws_region": "us-east-1",
         "check_interval_minutes": 15,

@@ -34,12 +34,13 @@ class ForeUpMonitor:
     be deployed on AWS Lambda or EC2 for 24/7 monitoring.
     """
 
-    def __init__(self, config_path: str, credentials_path: str):
+    def __init__(self, config_path: str, credentials_path: str, headless: bool = True):
         """Initialize the monitoring service.
 
         Args:
             config_path: Path to the configuration file
             credentials_path: Path to the credentials file
+            headless: Whether to run browser in headless mode (default: True for AWS)
         """
         self.logger = self._setup_logger()
         self.config = self._load_config(config_path)
@@ -47,6 +48,7 @@ class ForeUpMonitor:
         self.base_url = "https://foreupsoftware.com/index.php/booking/19348/1470"
         self.cloudwatch = boto3.client("cloudwatch", region_name="us-east-1")
         self.sns = boto3.client("sns", region_name="us-east-1")
+        self.headless = headless
 
     def _setup_logger(self) -> logging.Logger:
         """Set up logging configuration.
@@ -71,17 +73,14 @@ class ForeUpMonitor:
         with open(config_path) as f:
             return json.load(f)
 
-    def _setup_driver(self, headless: bool = True) -> webdriver.Chrome:
+    def _setup_driver(self) -> webdriver.Chrome:
         """Set up Chrome WebDriver for monitoring.
-
-        Args:
-            headless: Whether to run in headless mode
 
         Returns:
             Configured Chrome WebDriver
         """
         options = Options()
-        if headless:
+        if self.headless:
             options.add_argument("--headless=new")
             options.add_argument("--disable-gpu")
             options.add_argument("--no-sandbox")
@@ -115,18 +114,118 @@ class ForeUpMonitor:
             options.add_experimental_option("useAutomationExtension", False)
 
         try:
-            # Try to use system ChromeDriver first
-            service = Service("chromedriver")
+            # Use webdriver-manager to get the correct ChromeDriver
+            driver_path = ChromeDriverManager().install()
+            # Make sure we're using the actual chromedriver executable, not a notice file
+            if "THIRD_PARTY_NOTICES" in driver_path:
+                # Find the actual chromedriver executable in the same directory
+                import os
+
+                driver_dir = os.path.dirname(driver_path)
+                driver_path = os.path.join(driver_dir, "chromedriver")
+
+            service = Service(driver_path)
             driver = webdriver.Chrome(service=service, options=options)
-        except Exception:
-            # Fall back to webdriver-manager
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
+        except Exception as e:
+            self.logger.error(f"Failed to create Chrome driver: {str(e)}")
+            raise
 
         driver.execute_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
         return driver
+
+    def _login_to_foreup(self, driver: webdriver.Chrome, wait: WebDriverWait) -> bool:
+        """Log into ForeUp using credentials from config.
+
+        Args:
+            driver: Chrome WebDriver instance
+            wait: WebDriverWait instance
+
+        Returns:
+            True if login successful, False otherwise
+        """
+        try:
+            # Check if already logged in by looking for logout link
+            try:
+                logout_link = driver.find_element(By.CSS_SELECTOR, "a[href*='logout']")
+                self.logger.info("Already logged in to ForeUp")
+                return True
+            except:
+                pass
+
+            # Look for login form
+            try:
+                # Find username field
+                username_field = wait.until(
+                    EC.presence_of_element_located((By.ID, "login_email"))
+                )
+
+                # Clear and enter username
+                username_field.clear()
+                username_field.send_keys(self.credentials["username"])
+                self.logger.info("Entered username")
+
+                # Find password field
+                password_field = driver.find_element(By.NAME, "password")
+                password_field.clear()
+                password_field.send_keys(self.credentials["password"])
+                self.logger.info("Entered password")
+
+                # Find and click login button
+                login_button = driver.find_element(
+                    By.CSS_SELECTOR, "input[type='submit'], button[type='submit']"
+                )
+                login_button.click()
+                self.logger.info("Clicked login button")
+
+                # Wait for login to complete
+                time.sleep(5)
+
+                # Verify login was successful - try multiple indicators
+                try:
+                    # Check for logout link
+                    logout_link = wait.until(
+                        EC.presence_of_element_located(
+                            (By.CSS_SELECTOR, "a[href*='logout']")
+                        )
+                    )
+                    self.logger.info(
+                        "Successfully logged in to ForeUp (logout link found)"
+                    )
+                    return True
+                except:
+                    try:
+                        # Check for user menu or profile elements
+                        user_menu = driver.find_element(
+                            By.CSS_SELECTOR, ".user-menu, .profile, .account"
+                        )
+                        self.logger.info(
+                            "Successfully logged in to ForeUp (user menu found)"
+                        )
+                        return True
+                    except:
+                        try:
+                            # Check if login form is no longer present
+                            driver.find_element(By.ID, "login_email")
+                            self.logger.error(
+                                "Login form still present - login may have failed"
+                            )
+                            return False
+                        except:
+                            # Login form is gone, assume login was successful
+                            self.logger.info(
+                                "Successfully logged in to ForeUp (login form disappeared)"
+                            )
+                            return True
+
+            except Exception as e:
+                self.logger.error(f"Login failed: {str(e)}")
+                return False
+
+        except Exception as e:
+            self.logger.error(f"Login process failed: {str(e)}")
+            return False
 
     def check_availability(
         self, target_date: Optional[str] = None
@@ -151,37 +250,58 @@ class ForeUpMonitor:
             driver.get(self.base_url)
             time.sleep(2)
 
-            # Click on Reservations link (if not logged in)
+            # Login to ForeUp
+            if not self._login_to_foreup(driver, wait):
+                raise Exception("Failed to login to ForeUp")
+
+            # Navigate directly to the tee times page
+            tee_times_url = (
+                "https://foreupsoftware.com/index.php/booking/19348/1470#/teetimes"
+            )
+            self.logger.info("Navigating to tee times page...")
+            driver.get(tee_times_url)
+            time.sleep(5)  # Give more time for page to load
+            self.logger.info("Navigated to tee times page")
+            
+            # Wait for the page to be fully loaded
             try:
-                reservations_link = wait.until(
-                    EC.element_to_be_clickable(
-                        (By.CSS_SELECTOR, "a[href='#/teetimes']")
-                    )
-                )
-                reservations_link.click()
-                time.sleep(1)
-            except:
-                # Already on reservations page or different layout
-                pass
+                wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
+                self.logger.info("Page fully loaded")
+            except Exception as e:
+                self.logger.warning(f"Page load wait failed: {str(e)}")
 
-            # Click BOOK NOW button
-            book_now_button = wait.until(
-                EC.element_to_be_clickable(
-                    (
-                        By.CSS_SELECTOR,
-                        "button.btn.btn-primary.col-md-4.col-xs-12.col-md-offset-4",
-                    )
-                )
-            )
-            book_now_button.click()
-
+            # Debug: Check current page URL
+            current_url = driver.current_url
+            self.logger.info(f"Current page URL: {current_url}")
+            
             # Select date
-            date_field = wait.until(
-                EC.presence_of_element_located((By.ID, "date-field"))
-            )
-            date_field.clear()
-            date_field.send_keys(target_date)
-            date_field.send_keys("\n")  # Press Enter
+            try:
+                date_field = wait.until(
+                    EC.presence_of_element_located((By.ID, "date-field"))
+                )
+                self.logger.info("Found date field")
+                date_field.clear()
+                date_field.send_keys(target_date)
+                date_field.send_keys("\n")  # Press Enter
+                self.logger.info(f"Entered date: {target_date}")
+            except Exception as e:
+                self.logger.error(f"Could not find or interact with date field: {str(e)}")
+                # Try to find any date-related elements
+                try:
+                    date_elements = driver.find_elements(By.CSS_SELECTOR, "input[type='date'], input[placeholder*='date'], .date-picker")
+                    self.logger.info(f"Found {len(date_elements)} date-related elements")
+                    for i, elem in enumerate(date_elements):
+                        if elem:
+                            outer_html = elem.get_attribute('outerHTML')
+                            if outer_html:
+                                self.logger.info(f"Date element {i}: {outer_html[:100]}")
+                            else:
+                                self.logger.info(f"Date element {i}: No outerHTML")
+                        else:
+                            self.logger.info(f"Date element {i}: None")
+                except:
+                    pass
+                raise
 
             # Wait for time slots to load
             time.sleep(2)

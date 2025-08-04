@@ -53,6 +53,19 @@ class AWSDeployer:
             ARN of the created topic
         """
         try:
+            # Check if topic already exists
+            try:
+                response = self.sns_client.list_topics()
+                for topic in response["Topics"]:
+                    if topic_name in topic["TopicArn"]:
+                        self.logger.info(
+                            f"SNS topic already exists: {topic['TopicArn']}"
+                        )
+                        return topic["TopicArn"]
+            except Exception:
+                pass
+
+            # Create the topic
             response = self.sns_client.create_topic(Name=topic_name)
             topic_arn = response["TopicArn"]
             self.logger.info(f"Created SNS topic: {topic_arn}")
@@ -71,6 +84,15 @@ class AWSDeployer:
             ARN of the created role
         """
         try:
+            # Check if role already exists
+            try:
+                response = self.iam_client.get_role(RoleName=role_name)
+                role_arn = response["Role"]["Arn"]
+                self.logger.info(f"IAM role already exists: {role_arn}")
+                return role_arn
+            except self.iam_client.exceptions.NoSuchEntityException:
+                pass  # Role doesn't exist, create it
+
             # Create the role
             assume_role_policy = {
                 "Version": "2012-10-17",
@@ -184,6 +206,25 @@ class AWSDeployer:
             with open(package_path, "rb") as f:
                 zip_content = f.read()
 
+            # Check if function already exists
+            try:
+                existing_response = self.lambda_client.get_function(
+                    FunctionName=function_name
+                )
+                function_arn = existing_response["Configuration"]["FunctionArn"]
+                self.logger.info(f"Lambda function already exists: {function_arn}")
+
+                # Update the function code
+                self.lambda_client.update_function_code(
+                    FunctionName=function_name, ZipFile=zip_content
+                )
+                self.logger.info(f"Updated Lambda function code: {function_arn}")
+                return function_arn
+
+            except self.lambda_client.exceptions.ResourceNotFoundException:
+                pass  # Function doesn't exist, create it
+
+            # Create new function
             response = self.lambda_client.create_function(
                 FunctionName=function_name,
                 Runtime="python3.9",
@@ -217,6 +258,27 @@ class AWSDeployer:
             ARN of the created rule
         """
         try:
+            # Check if rule already exists
+            try:
+                response = self.events_client.describe_rule(Name=rule_name)
+                rule_arn = response["Arn"]
+                self.logger.info(f"EventBridge rule already exists: {rule_arn}")
+
+                # Update the rule schedule if needed
+                if response.get("ScheduleExpression") != schedule_expression:
+                    self.events_client.put_rule(
+                        Name=rule_name,
+                        ScheduleExpression=schedule_expression,
+                        State="ENABLED",
+                        Description="ForeUp monitoring schedule",
+                    )
+                    self.logger.info(f"Updated EventBridge rule schedule: {rule_arn}")
+
+                return rule_arn
+
+            except self.events_client.exceptions.ResourceNotFoundException:
+                pass  # Rule doesn't exist, create it
+
             # Create the rule
             response = self.events_client.put_rule(
                 Name=rule_name,
@@ -232,14 +294,17 @@ class AWSDeployer:
                 Targets=[{"Id": "ForeUpMonitorTarget", "Arn": target_arn}],
             )
 
-            # Add permission for EventBridge to invoke Lambda
-            self.lambda_client.add_permission(
-                FunctionName=target_arn,
-                StatementId="EventBridgeInvoke",
-                Action="lambda:InvokeFunction",
-                Principal="events.amazonaws.com",
-                SourceArn=rule_arn,
-            )
+            # Add permission for EventBridge to invoke Lambda (only if it doesn't exist)
+            try:
+                self.lambda_client.add_permission(
+                    FunctionName=target_arn,
+                    StatementId="EventBridgeInvoke",
+                    Action="lambda:InvokeFunction",
+                    Principal="events.amazonaws.com",
+                    SourceArn=rule_arn,
+                )
+            except self.lambda_client.exceptions.ResourceConflictException:
+                self.logger.info("Lambda permission already exists, skipping...")
 
             self.logger.info(f"Created EventBridge rule: {rule_arn}")
             return rule_arn
