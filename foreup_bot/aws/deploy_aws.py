@@ -9,6 +9,7 @@ for continuous availability monitoring.
 import json
 import logging
 import os
+import time
 import zipfile
 from typing import Any, Dict
 
@@ -101,6 +102,10 @@ class AWSDeployer:
                     RoleName=role_name, PolicyArn=policy_arn
                 )
 
+            # Wait for role to be fully propagated
+            self.logger.info("Waiting for IAM role to propagate...")
+            time.sleep(10)
+
             self.logger.info(f"Created IAM role: {role_arn}")
             return role_arn
 
@@ -120,13 +125,21 @@ class AWSDeployer:
         """
         try:
             with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-                # Add Python files
+                # Add Python files from current directory
                 for file in os.listdir(source_dir):
                     if file.endswith(".py") or file.endswith(".json"):
                         file_path = os.path.join(source_dir, file)
                         if os.path.isfile(file_path):
                             zipf.write(file_path, file)
                             self.logger.info(f"Added to package: {file}")
+
+                # Add Lambda handler file
+                lambda_handler_path = os.path.join(source_dir, "lambda_handler.py")
+                if os.path.exists(lambda_handler_path):
+                    zipf.write(lambda_handler_path, "lambda_handler.py")
+                    self.logger.info("Added to package: lambda_handler.py")
+                else:
+                    raise Exception("lambda_handler.py not found in root directory")
 
                 # Add requirements.txt from parent directory
                 requirements_path = os.path.join(
@@ -154,7 +167,7 @@ class AWSDeployer:
         function_name: str,
         role_arn: str,
         package_path: str,
-        handler: str = "monitoring_service.lambda_handler",
+        handler: str = "lambda_handler.lambda_handler",
     ) -> str:
         """Deploy Lambda function.
 

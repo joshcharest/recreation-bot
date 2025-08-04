@@ -141,8 +141,8 @@ def check_cloudwatch_metrics():
         start_time = end_time - timedelta(hours=1)
 
         response = cloudwatch.get_metric_statistics(
-            Namespace="ForeUpBot/Monitoring",
-            MetricName="AvailableTeeTimes",
+            Namespace="ForeUpMonitoring",
+            MetricName="AvailableTimes",
             StartTime=start_time,
             EndTime=end_time,
             Period=300,  # 5-minute periods
@@ -165,6 +165,45 @@ def check_cloudwatch_metrics():
         return False
 
 
+def check_current_configuration():
+    """Check the current configuration being used by AWS."""
+    print("\n⚙️  Checking current AWS configuration...")
+
+    try:
+        # Load configuration from the main config file
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(script_dir, "..", "foreup_config.json")
+
+        with open(config_path, "r") as f:
+            config = json.load(f)
+
+        print("✅ Current configuration:")
+        print(f"   Target Date: {config.get('target_date', 'Not set')}")
+        print(f"   Number of Players: {config.get('num_players', 'Not set')}")
+        print(f"   Start Time: {config.get('start_time', 'Not set')}")
+        print(
+            f"   Window: {config.get('window_start_time', 'Not set')} - {config.get('window_end_time', 'Not set')}"
+        )
+
+        if "monitoring" in config:
+            monitoring = config["monitoring"]
+            print(f"   AWS Region: {monitoring.get('aws_region', 'Not set')}")
+            print(
+                f"   Check Interval: {monitoring.get('check_interval_minutes', 'Not set')} minutes"
+            )
+            print(
+                f"   Notification Email: {monitoring.get('notification_email', 'Not set')}"
+            )
+            print(
+                f"   SNS Topic: {monitoring.get('sns_topic_arn', 'Not set').split(':')[-1] if monitoring.get('sns_topic_arn') else 'Not set'}"
+            )
+
+        return True
+    except Exception as e:
+        print(f"❌ Configuration check error: {e}")
+        return False
+
+
 def main():
     """Main status checking function."""
     print("🏌️‍♂️ ForeUp Monitoring Service - Status Check")
@@ -176,6 +215,7 @@ def main():
         check_sns_topic,
         check_cloudwatch_logs,
         check_cloudwatch_metrics,
+        check_current_configuration,
     ]
 
     results = []

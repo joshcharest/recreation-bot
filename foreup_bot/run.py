@@ -17,10 +17,9 @@ def print_menu():
     print("2. 🔍 Run Local Monitoring")
     print("3. ☁️  Deploy to AWS")
     print("4. 🧹 Clean up AWS Resources")
-    print("5. 📧 Subscribe to Notifications")
-    print("6. 📊 Check AWS Status")
-    print("7. 🚀 Quick Start Setup")
-    print("8. 📚 View Documentation")
+    print("5. 📊 Check AWS Status")
+    print("6. 🚀 Quick Start Setup")
+    print("7. 📚 View Documentation")
     print("0. ❌ Exit")
     print("=" * 50)
 
@@ -97,20 +96,6 @@ def cleanup_aws():
         return False
 
 
-def subscribe_notifications():
-    """Subscribe to notifications."""
-    email = input("Enter your email address: ").strip()
-    if email:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        return run_command(
-            f"cd {script_dir} && python aws/subscribe_notifications.py {email}",
-            f"Subscribing {email} to notifications",
-        )
-    else:
-        print("❌ No email provided")
-        return False
-
-
 def check_aws_status():
     """Check AWS deployment status."""
     # Get the directory where this script is located
@@ -166,15 +151,13 @@ def main():
             elif choice == "4":
                 cleanup_aws()
             elif choice == "5":
-                subscribe_notifications()
-            elif choice == "6":
                 check_aws_status()
-            elif choice == "7":
+            elif choice == "6":
                 quick_start()
-            elif choice == "8":
+            elif choice == "7":
                 view_documentation()
             else:
-                print("❌ Invalid option. Please select 0-8.")
+                print("❌ Invalid option. Please select 0-7.")
 
         except KeyboardInterrupt:
             print("\n\n👋 Goodbye!")

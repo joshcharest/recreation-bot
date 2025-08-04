@@ -60,9 +60,9 @@ def check_config_files():
     print("\n⚙️  Checking configuration files...")
 
     config_files = {
-        "../config/foreup_config.json": "Main configuration file",
-        "../config/credentials_template.json": "Credentials template",
-        "../config/credentials.json": "Your credentials (create from template)",
+        "config/foreup_config.json": "Main configuration file",
+        "config/credentials_template.json": "Credentials template",
+        "config/credentials.json": "Your credentials (create from template)",
     }
 
     for file, description in config_files.items():
@@ -78,13 +78,13 @@ def setup_credentials():
     """Help user set up credentials."""
     print("\n🔐 Setting up credentials...")
 
-    if os.path.exists("../config/credentials.json"):
+    if os.path.exists("config/credentials.json"):
         print("✅ Credentials file already exists")
         return True
 
-    if os.path.exists("../config/credentials_template.json"):
+    if os.path.exists("config/credentials_template.json"):
         print("📝 Creating credentials file from template...")
-        shutil.copy("../config/credentials_template.json", "../config/credentials.json")
+        shutil.copy("config/credentials_template.json", "config/credentials.json")
         print("✅ Created credentials.json")
         print("⚠️  Please edit credentials.json with your actual ForeUp login details")
         return True
