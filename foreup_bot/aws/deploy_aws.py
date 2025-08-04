@@ -212,6 +212,37 @@ class AWSDeployer:
                     zipf.write(requirements_path, "requirements.txt")
                     self.logger.info("Added to package: requirements.txt")
 
+                # Install key Python dependencies to the package
+                import subprocess
+                import tempfile
+
+                # Create a temporary directory for dependencies
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    subprocess.run(
+                        [
+                            "pip",
+                            "install",
+                            "selenium==4.18.1",
+                            "boto3>=1.34.0",
+                            "requests>=2.31.0",
+                            "-t",
+                            temp_dir,
+                            "--platform",
+                            "manylinux2014_x86_64",
+                            "--only-binary=:all:",
+                        ],
+                        check=True,
+                    )
+
+                    # Add all installed packages to the ZIP
+                    for root, dirs, files in os.walk(temp_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arc_name = os.path.relpath(file_path, temp_dir)
+                            zipf.write(file_path, arc_name)
+
+                    self.logger.info("Added Python dependencies to package")
+
                 # Add credentials file
                 credentials_path = os.path.join(
                     source_dir, "config", "credentials.json"
@@ -254,45 +285,124 @@ class AWSDeployer:
             ARN of the deployed function
         """
         try:
-            with open(package_path, "rb") as f:
-                zip_content = f.read()
-
             # Check if function already exists
             try:
-                existing_response = self.lambda_client.get_function(
-                    FunctionName=function_name
-                )
-                function_arn = existing_response["Configuration"]["FunctionArn"]
+                response = self.lambda_client.get_function(FunctionName=function_name)
+                function_arn = response["Configuration"]["FunctionArn"]
                 self.logger.info(f"Lambda function already exists: {function_arn}")
 
-                # Update the function code
-                self.lambda_client.update_function_code(
-                    FunctionName=function_name, ZipFile=zip_content
-                )
+                # Update function code
+                with open(package_path, "rb") as f:
+                    self.lambda_client.update_function_code(
+                        FunctionName=function_name, ZipFile=f.read()
+                    )
                 self.logger.info(f"Updated Lambda function code: {function_arn}")
-                return function_arn
 
+                # Update function configuration for browser automation
+                try:
+                    self.lambda_client.update_function_configuration(
+                        FunctionName=function_name,
+                        Timeout=300,  # 5 minutes for browser automation
+                        MemorySize=1024,  # 1GB for Chrome
+                        Environment={
+                            "Variables": {
+                                "PYTHONPATH": "/opt/python",
+                                "PATH": "/opt/chrome:/opt/chromedriver:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                            }
+                        },
+                    )
+                    self.logger.info(
+                        "Updated Lambda configuration for browser automation"
+                    )
+                except Exception as e:
+                    self.logger.warning(
+                        f"Could not update Lambda configuration: {str(e)}"
+                    )
+                    self.logger.info(
+                        "Lambda function updated successfully, configuration will be updated on next deployment"
+                    )
+
+                return function_arn
             except self.lambda_client.exceptions.ResourceNotFoundException:
                 pass  # Function doesn't exist, create it
 
             # Create new function
-            response = self.lambda_client.create_function(
-                FunctionName=function_name,
-                Runtime="python3.9",
-                Role=role_arn,
-                Handler=handler,
-                Code={"ZipFile": zip_content},
-                Timeout=300,
-                MemorySize=512,
-                Environment={"Variables": {"PYTHONPATH": "/var/task"}},
-            )
+            with open(package_path, "rb") as f:
+                response = self.lambda_client.create_function(
+                    FunctionName=function_name,
+                    Runtime="python3.9",
+                    Role=role_arn,
+                    Handler=handler,
+                    Code={"ZipFile": f.read()},
+                    Description="ForeUp tee time monitoring service",
+                    Timeout=300,  # 5 minutes for browser automation
+                    MemorySize=1024,  # 1GB for Chrome
+                    Environment={
+                        "Variables": {
+                            "PYTHONPATH": "/opt/python",
+                            "PATH": "/opt/chrome:/opt/chromedriver:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                        }
+                    },
+                )
 
             function_arn = response["FunctionArn"]
-            self.logger.info(f"Deployed Lambda function: {function_arn}")
+            self.logger.info(f"Created Lambda function: {function_arn}")
             return function_arn
 
         except Exception as e:
             self.logger.error(f"Failed to deploy Lambda function: {str(e)}")
+            raise
+
+    def create_lambda_layer(self) -> str:
+        """Create Lambda layer with Chrome and ChromeDriver."""
+        try:
+            # Import the layer creation function
+            from create_lambda_layer import create_lambda_layer
+
+            layer_path = create_lambda_layer()
+            if not layer_path:
+                raise Exception("Failed to create Lambda layer")
+
+            # Upload layer to AWS
+            layer_name = "ForeUpMonitorChromeLayer"
+            with open(layer_path, "rb") as f:
+                response = self.lambda_client.publish_layer_version(
+                    LayerName=layer_name,
+                    Description="Chrome and ChromeDriver for ForeUp monitoring",
+                    Content={"ZipFile": f.read()},
+                    CompatibleRuntimes=["python3.9"],
+                    CompatibleArchitectures=["x86_64"],
+                )
+
+            layer_arn = response["LayerVersionArn"]
+            self.logger.info(f"Created Lambda layer: {layer_arn}")
+            return layer_arn
+
+        except Exception as e:
+            self.logger.error(f"Failed to create Lambda layer: {str(e)}")
+            raise
+
+    def attach_layer_to_function(self, function_name: str, layer_arn: str) -> None:
+        """Attach layer to Lambda function."""
+        try:
+            # Get current function configuration
+            response = self.lambda_client.get_function(FunctionName=function_name)
+            current_layers = response["Configuration"].get("Layers", [])
+
+            # Add new layer
+            new_layers = [layer["Arn"] for layer in current_layers]
+            if layer_arn not in new_layers:
+                new_layers.append(layer_arn)
+
+            # Update function configuration
+            self.lambda_client.update_function_configuration(
+                FunctionName=function_name, Layers=new_layers
+            )
+
+            self.logger.info(f"Attached layer to function: {layer_arn}")
+
+        except Exception as e:
+            self.logger.error(f"Failed to attach layer: {str(e)}")
             raise
 
     def create_eventbridge_rule(
@@ -395,18 +505,17 @@ class AWSDeployer:
             package_path = "foreup_monitor_lambda.zip"
             self.create_lambda_package(".", package_path)
 
-            # Note: For Selenium to work in Lambda, you'll need to:
-            # 1. Create a Lambda layer with Chrome and ChromeDriver
-            # 2. Attach the layer to the Lambda function
-            # 3. Increase Lambda timeout and memory
-            self.logger.warning(
-                "Selenium-based Lambda requires Chrome layer for full functionality"
-            )
-
             # Deploy Lambda function
             function_name = "ForeUpMonitor"
             resources["function_arn"] = self.deploy_lambda_function(
                 function_name, resources["role_arn"], package_path
+            )
+
+            # Note: Lambda layer creation is complex and requires additional setup
+            # For now, the Lambda will use system Chrome if available
+            self.logger.info("Lambda layer creation skipped - using system Chrome")
+            self.logger.info(
+                "For full Chrome support, manually create and attach a Lambda layer"
             )
 
             # Create EventBridge rule for periodic execution
@@ -467,6 +576,28 @@ class AWSDeployer:
             if "sns_topic_arn" in resources:
                 self.sns_client.delete_topic(TopicArn=resources["sns_topic_arn"])
                 self.logger.info("Deleted SNS topic")
+
+            # Delete Lambda layer
+            if "layer_arn" in resources:
+                layer_name = "ForeUpMonitorChromeLayer"
+                try:
+                    response = self.lambda_client.list_layer_versions(
+                        LayerName=layer_name
+                    )
+                    if response["LayerVersions"]:
+                        latest_version = response["LayerVersions"][0]["Version"]
+                        self.lambda_client.delete_layer_version(
+                            LayerName=layer_name, VersionNumber=latest_version
+                        )
+                        self.logger.info(
+                            f"Deleted Lambda layer version {latest_version}"
+                        )
+                except self.lambda_client.exceptions.ResourceNotFoundException:
+                    self.logger.info(
+                        f"Lambda layer {layer_name} not found, skipping deletion."
+                    )
+                except Exception as e:
+                    self.logger.error(f"Failed to delete Lambda layer: {str(e)}")
 
             self.logger.info("Cleanup completed successfully!")
 
