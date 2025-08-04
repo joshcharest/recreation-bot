@@ -88,8 +88,6 @@ class ForeUpMonitor:
             options.add_argument("--disable-extensions")
             options.add_argument("--disable-plugins")
             options.add_argument("--disable-images")
-            options.add_argument("--disable-javascript")
-            options.add_argument("--disable-css")
             options.add_argument("--disable-animations")
             options.add_argument("--disable-web-security")
             options.add_argument("--disable-features=VizDisplayCompositor")
@@ -110,8 +108,18 @@ class ForeUpMonitor:
             options.add_argument("--no-first-run")
             options.add_argument("--safebrowsing-disable-auto-update")
             options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_argument(
+                "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
             options.add_experimental_option("useAutomationExtension", False)
+            options.add_experimental_option(
+                "prefs",
+                {
+                    "profile.default_content_setting_values.notifications": 2,
+                    "profile.managed_default_content_settings.images": 2,
+                },
+            )
 
         try:
             # Use webdriver-manager to get the correct ChromeDriver
@@ -146,14 +154,6 @@ class ForeUpMonitor:
             True if login successful, False otherwise
         """
         try:
-            # Check if already logged in by looking for logout link
-            try:
-                logout_link = driver.find_element(By.CSS_SELECTOR, "a[href*='logout']")
-                self.logger.info("Already logged in to ForeUp")
-                return True
-            except:
-                pass
-
             # Look for login form
             try:
                 # Find username field
@@ -180,44 +180,9 @@ class ForeUpMonitor:
                 self.logger.info("Clicked login button")
 
                 # Wait for login to complete
-                time.sleep(5)
-
-                # Verify login was successful - try multiple indicators
-                try:
-                    # Check for logout link
-                    logout_link = wait.until(
-                        EC.presence_of_element_located(
-                            (By.CSS_SELECTOR, "a[href*='logout']")
-                        )
-                    )
-                    self.logger.info(
-                        "Successfully logged in to ForeUp (logout link found)"
-                    )
-                    return True
-                except:
-                    try:
-                        # Check for user menu or profile elements
-                        user_menu = driver.find_element(
-                            By.CSS_SELECTOR, ".user-menu, .profile, .account"
-                        )
-                        self.logger.info(
-                            "Successfully logged in to ForeUp (user menu found)"
-                        )
-                        return True
-                    except:
-                        try:
-                            # Check if login form is no longer present
-                            driver.find_element(By.ID, "login_email")
-                            self.logger.error(
-                                "Login form still present - login may have failed"
-                            )
-                            return False
-                        except:
-                            # Login form is gone, assume login was successful
-                            self.logger.info(
-                                "Successfully logged in to ForeUp (login form disappeared)"
-                            )
-                            return True
+                time.sleep(2)
+                self.logger.info("Login attempt completed")
+                return True
 
             except Exception as e:
                 self.logger.error(f"Login failed: {str(e)}")
@@ -260,41 +225,60 @@ class ForeUpMonitor:
             )
             self.logger.info("Navigating to tee times page...")
             driver.get(tee_times_url)
-            time.sleep(5)  # Give more time for page to load
             self.logger.info("Navigated to tee times page")
-            
-            # Wait for the page to be fully loaded
-            try:
-                wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
-                self.logger.info("Page fully loaded")
-            except Exception as e:
-                self.logger.warning(f"Page load wait failed: {str(e)}")
 
-            # Debug: Check current page URL
-            current_url = driver.current_url
-            self.logger.info(f"Current page URL: {current_url}")
-            
-            # Select date
+            # Click "STANDARD TEE TIMES (0-7 DAYS)" button
             try:
-                date_field = wait.until(
-                    EC.presence_of_element_located((By.ID, "date-field"))
+                standard_tee_times_button = wait.until(
+                    EC.element_to_be_clickable(
+                        (
+                            By.CSS_SELECTOR,
+                            "button.btn.btn-primary.col-md-4.col-xs-12.col-md-offset-4",
+                        )
+                    )
                 )
-                self.logger.info("Found date field")
-                date_field.clear()
-                date_field.send_keys(target_date)
-                date_field.send_keys("\n")  # Press Enter
-                self.logger.info(f"Entered date: {target_date}")
+                self.logger.info("Found STANDARD TEE TIMES button, clicking...")
+                standard_tee_times_button.click()
+                time.sleep(2)
+                self.logger.info("Clicked STANDARD TEE TIMES button")
             except Exception as e:
-                self.logger.error(f"Could not find or interact with date field: {str(e)}")
+                self.logger.error(f"Could not find STANDARD TEE TIMES button: {str(e)}")
+                raise
+
+            # Select date from dropdown
+            try:
+                date_dropdown = wait.until(
+                    EC.presence_of_element_located((By.ID, "date-menu"))
+                )
+                self.logger.info("Found date dropdown")
+
+                # Select the target date from the dropdown
+                from selenium.webdriver.support.select import Select
+
+                select = Select(date_dropdown)
+                select.select_by_value(str(target_date))
+                self.logger.info(f"Selected date: {target_date}")
+
+            except Exception as e:
+                self.logger.error(
+                    f"Could not find or interact with date dropdown: {str(e)}"
+                )
                 # Try to find any date-related elements
                 try:
-                    date_elements = driver.find_elements(By.CSS_SELECTOR, "input[type='date'], input[placeholder*='date'], .date-picker")
-                    self.logger.info(f"Found {len(date_elements)} date-related elements")
+                    date_elements = driver.find_elements(
+                        By.CSS_SELECTOR,
+                        "select[name='date'], input[type='date'], input[placeholder*='date'], .date-picker",
+                    )
+                    self.logger.info(
+                        f"Found {len(date_elements)} date-related elements"
+                    )
                     for i, elem in enumerate(date_elements):
                         if elem:
-                            outer_html = elem.get_attribute('outerHTML')
+                            outer_html = elem.get_attribute("outerHTML")
                             if outer_html:
-                                self.logger.info(f"Date element {i}: {outer_html[:100]}")
+                                self.logger.info(
+                                    f"Date element {i}: {outer_html[:100]}"
+                                )
                             else:
                                 self.logger.info(f"Date element {i}: No outerHTML")
                         else:
@@ -312,13 +296,44 @@ class ForeUpMonitor:
             )
 
             time_slots = []
+            required_players = self.config.get("num_players", 4)
+            self.logger.info(
+                f"Looking for tee times with at least {required_players} players"
+            )
+
             for time_element in available_times:
                 try:
+                    # Get the time
                     time_str = time_element.find_element(
                         By.CSS_SELECTOR, "div.booking-start-time-label"
                     ).text
-                    time_slots.append(time_str)
-                except:
+
+                    # Check player capacity
+                    player_spans = time_element.find_elements(
+                        By.CSS_SELECTOR, "span.booking-slot-players span"
+                    )
+                    available_spots = 0
+
+                    for span in player_spans:
+                        try:
+                            spot_count = int(span.text.strip())
+                            available_spots = max(available_spots, spot_count)
+                        except (ValueError, AttributeError):
+                            continue
+
+                    # Only include if enough spots for required players
+                    if available_spots >= required_players:
+                        time_slots.append(f"{time_str} ({available_spots} spots)")
+                        self.logger.info(
+                            f"Found suitable time: {time_str} with {available_spots} spots"
+                        )
+                    else:
+                        self.logger.info(
+                            f"Skipping {time_str} - only {available_spots} spots available"
+                        )
+
+                except Exception as e:
+                    self.logger.warning(f"Error processing time element: {str(e)}")
                     continue
 
             return AvailabilityCheck(
