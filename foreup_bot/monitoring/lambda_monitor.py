@@ -148,50 +148,104 @@ class LambdaForeUpMonitor:
             List of available tee times
         """
         tee_times = []
+        required_players = self.config.get("num_players", 4)
 
         try:
             soup = BeautifulSoup(html_content, "html.parser")
 
-            # Look for tee time elements
-            # This is a simplified approach - the actual selectors may need adjustment
-            time_elements = (
-                soup.find_all("div", class_="tee-time")
-                or soup.find_all("div", class_="time-slot")
-                or soup.find_all("span", class_="time")
-            )
+            # Look for different types of tee time elements (similar to Playwright selectors)
+            selectors = [
+                ".booking-slot:not(.unavailable)",
+                ".time-slot:not(.unavailable)",
+                ".teetime:not(.unavailable)",
+                ".time:not(.unavailable)",
+                "[data-time]:not(.unavailable)",
+                ".available-time",
+                ".time-tile:not(.unavailable)",
+                ".tee-time",
+                ".time-slot",
+                ".time",
+                ".booking-slot",
+                ".teetime",
+            ]
 
-            for element in time_elements:
-                time_text = element.get_text().strip()
-                if time_text and ":" in time_text:  # Basic validation
-                    # Try to extract available spots
-                    spots_element = element.find_next_sibling() or element.parent
-                    spots_text = spots_element.get_text() if spots_element else ""
+            for selector in selectors:
+                # Convert CSS selector to BeautifulSoup find_all
+                if selector.startswith("."):
+                    class_name = selector[1:]  # Remove the dot
+                    if ":not(.unavailable)" in selector:
+                        class_name = class_name.replace(":not(.unavailable)", "")
+                        elements = soup.find_all(attrs={"class": class_name})
+                        # Filter out elements with "unavailable" class
+                        elements = [
+                            el
+                            for el in elements
+                            if "unavailable" not in (el.get("class") or [])
+                        ]
+                    else:
+                        elements = soup.find_all(attrs={"class": class_name})
+                elif selector.startswith("[data-time]"):
+                    elements = soup.find_all(attrs={"data-time": True})
+                    if ":not(.unavailable)" in selector:
+                        elements = [
+                            el
+                            for el in elements
+                            if "unavailable" not in (el.get("class") or [])
+                        ]
+                else:
+                    elements = []
 
-                    # Extract number from spots text
-                    import re
+                for element in elements[:20]:  # Limit to first 20
+                    try:
+                        text = element.get_text().strip()
+                        if text:
+                            # Look for time patterns
+                            import re
 
-                    spots_match = re.search(r"(\d+)", spots_text)
-                    available_spots = int(spots_match.group(1)) if spots_match else 4
+                            time_pattern = r"(\d{1,2}:\d{2}\s*(?:am|pm|AM|PM))"
+                            time_matches = re.findall(time_pattern, text)
 
-                    tee_times.append(
-                        TeeTime(time=time_text, available_spots=available_spots)
-                    )
+                            if time_matches:
+                                time_str = time_matches[0]
 
-            # If no structured data found, try to extract from any text
+                                # Look for player count
+                                player_pattern = r"(\d+)\s*(?:spots?|players?)"
+                                player_matches = re.findall(player_pattern, text)
+
+                                if player_matches:
+                                    available_spots = int(player_matches[0])
+                                    if available_spots >= required_players:
+                                        tee_times.append(
+                                            TeeTime(
+                                                time=time_str,
+                                                available_spots=available_spots,
+                                            )
+                                        )
+                                else:
+                                    # Assume 4 spots if not specified
+                                    tee_times.append(
+                                        TeeTime(time=time_str, available_spots=4)
+                                    )
+
+                    except Exception as e:
+                        self.logger.warning(f"Error processing element: {str(e)}")
+                        continue
+
+                if tee_times:
+                    break
+
+            # If no structured elements found, try to extract from all text
             if not tee_times:
-                # Look for time patterns in the entire page
+                all_text = soup.get_text()
                 import re
 
-                time_pattern = r"(\d{1,2}:\d{2}\s*(?:am|pm)?)"
-                times = re.findall(time_pattern, html_content, re.IGNORECASE)
+                time_pattern = r"(\d{1,2}:\d{2}\s*(?:am|pm|AM|PM))"
+                time_matches = re.findall(time_pattern, all_text)
 
-                for time_str in times[:10]:  # Limit to first 10 matches
-                    tee_times.append(
-                        TeeTime(
-                            time=time_str,
-                            available_spots=4,  # Default assumption
-                        )
-                    )
+                if time_matches:
+                    unique_times = list(set(time_matches))
+                    for time_str in unique_times[:10]:  # Limit to first 10
+                        tee_times.append(TeeTime(time=time_str, available_spots=4))
 
         except Exception as e:
             self.logger.error(f"Error extracting tee times: {str(e)}")

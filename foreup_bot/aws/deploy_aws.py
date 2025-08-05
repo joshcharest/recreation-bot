@@ -281,6 +281,42 @@ class AWSDeployer:
             self.logger.error(f"Failed to create Lambda package: {str(e)}")
             raise
 
+    def attach_playwright_layer(self, function_name: str, layer_path: str) -> None:
+        """Attach Playwright layer to Lambda function.
+
+        Args:
+            function_name: Name of the Lambda function
+            layer_path: Path to the layer ZIP file
+        """
+        try:
+            # Create layer in AWS
+            with open(layer_path, "rb") as f:
+                layer_content = f.read()
+
+            # Create layer
+            response = self.lambda_client.publish_layer_version(
+                LayerName="ForeUpPlaywrightLayer",
+                Description="Playwright and Chromium browser for ForeUp monitoring",
+                Content={"ZipFile": layer_content},
+                CompatibleRuntimes=["python3.9"],
+                CompatibleArchitectures=["x86_64"],
+            )
+
+            layer_arn = response["LayerVersionArn"]
+            self.logger.info(f"Created Playwright layer: {layer_arn}")
+
+            # Attach layer to function
+            self.lambda_client.update_function_configuration(
+                FunctionName=function_name,
+                Layers=[layer_arn],
+            )
+
+            self.logger.info("Playwright layer attached to Lambda function")
+
+        except Exception as e:
+            self.logger.error(f"Failed to attach Playwright layer: {str(e)}")
+            raise
+
     def deploy_lambda_function(
         self,
         function_name: str,
@@ -468,14 +504,29 @@ class AWSDeployer:
             package_path = "foreup_monitor_lambda.zip"
             self.create_lambda_package(".", package_path)
 
-            # Deploy Lambda function
+            # Create Playwright layer
+            layer_path = "playwright_lambda_layer.zip"
+            if not os.path.exists(layer_path):
+                self.logger.info("Creating Playwright Lambda layer...")
+                import subprocess
+
+                subprocess.run(["python", "aws/setup_playwright_lambda.py"], check=True)
+
+            # Deploy Lambda function with Playwright layer
             function_name = "ForeUpMonitor"
             resources["function_arn"] = self.deploy_lambda_function(
                 function_name,
                 resources["role_arn"],
                 package_path,
-                handler="lambda_handler_simple.lambda_handler",
+                handler="lambda_handler_playwright.lambda_handler",
             )
+
+            # Attach Playwright layer
+            if os.path.exists(layer_path):
+                self.attach_playwright_layer(function_name, layer_path)
+                self.logger.info("Playwright layer attached successfully")
+            else:
+                self.logger.warning("Playwright layer not found, skipping attachment")
 
             # Create EventBridge rule for periodic execution
             interval_minutes = config["monitoring"]["check_interval_minutes"]

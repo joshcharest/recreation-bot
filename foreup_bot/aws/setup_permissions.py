@@ -110,6 +110,33 @@ def create_foreup_monitoring_policy():
                     "arn:aws:logs:us-east-1:245706660322:log-group:*",
                 ],
             },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "ecr:GetAuthorizationToken",
+                ],
+                "Resource": "*",
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "ecr:CreateRepository",
+                    "ecr:DeleteRepository",
+                    "ecr:DescribeRepositories",
+                    "ecr:ListRepositories",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:UploadLayerPart",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:PutImage",
+                ],
+                "Resource": [
+                    "arn:aws:ecr:us-east-1:245706660322:repository/foreup-monitor*",
+                    "arn:aws:ecr:us-east-1:245706660322:repository/foreup-monitor*:*",
+                ],
+            },
         ],
     }
 
