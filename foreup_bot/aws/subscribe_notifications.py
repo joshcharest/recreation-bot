@@ -4,6 +4,7 @@ Script to subscribe to SNS notifications for ForeUp monitoring.
 """
 
 import json
+import os
 
 import boto3
 
@@ -15,7 +16,10 @@ def subscribe_to_notifications(email: str):
         sns = boto3.client("sns", region_name="us-east-1")
 
         # Get the topic ARN from config
-        with open("foreup_config.json", "r") as f:
+        config_path = os.path.join(
+            os.path.dirname(__file__), "..", "config", "foreup_config.json"
+        )
+        with open(config_path, "r") as f:
             config = json.load(f)
 
         topic_arn = config["monitoring"]["sns_topic_arn"]
@@ -41,7 +45,10 @@ def list_subscriptions():
     try:
         sns = boto3.client("sns", region_name="us-east-1")
 
-        with open("foreup_config.json", "r") as f:
+        config_path = os.path.join(
+            os.path.dirname(__file__), "..", "config", "foreup_config.json"
+        )
+        with open(config_path, "r") as f:
             config = json.load(f)
 
         topic_arn = config["monitoring"]["sns_topic_arn"]

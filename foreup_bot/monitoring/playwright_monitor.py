@@ -3,6 +3,7 @@
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -501,8 +502,12 @@ def lambda_handler(event, context):
 
     try:
         # Load configuration
-        config_path = "foreup_config.json"
-        credentials_path = "credentials.json"
+        config_path = os.path.join(
+            os.path.dirname(__file__), "..", "config", "foreup_config.json"
+        )
+        credentials_path = os.path.join(
+            os.path.dirname(__file__), "..", "config", "credentials.json"
+        )
 
         # Create monitor
         monitor = PlaywrightForeUpMonitor(config_path, credentials_path, headless=True)

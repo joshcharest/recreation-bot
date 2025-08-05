@@ -610,8 +610,11 @@ class AWSDeployer:
 
 def main():
     """Main deployment function."""
-    # Load configuration
-    with open("foreup_config.json", "r") as f:
+    # Load configuration from config directory
+    config_path = os.path.join(
+        os.path.dirname(__file__), "..", "config", "foreup_config.json"
+    )
+    with open(config_path, "r") as f:
         config = json.load(f)
 
     # Initialize deployer
@@ -622,7 +625,7 @@ def main():
         resources = deployer.deploy_monitoring_service(config)
 
         # Save updated config
-        with open("foreup_config.json", "w") as f:
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=4)
 
         print("\nDeployment completed successfully!")
