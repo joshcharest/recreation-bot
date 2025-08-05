@@ -39,7 +39,7 @@ def run_command(command, description):
                 "subscribe_notifications.py",
             ]
         ):
-            env["AWS_PROFILE"] = "personal"
+            env["AWS_PROFILE"] = "josh"
             env["AWS_DEFAULT_REGION"] = "us-east-1"
 
         # Use python3 explicitly

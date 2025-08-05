@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""AWS Lambda handler for ForeUp tee time monitoring using Playwright."""
+"""AWS Lambda handler for ForeUp tee time monitoring using requests/BeautifulSoup."""
 
 import json
 import logging
-import os
 import sys
 
-# Add the monitoring directory to the path so we can import the Playwright monitor
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "monitoring"))
+# Add the monitoring directory to the path so we can import the Lambda monitor
+sys.path.append("monitoring")
 
-from playwright_monitor import PlaywrightForeUpMonitor
+from lambda_monitor import LambdaForeUpMonitor
 
 
 def lambda_handler(event, context):
@@ -20,15 +19,11 @@ def lambda_handler(event, context):
 
     try:
         # Load configuration
-        config_path = os.path.join(
-            os.path.dirname(__file__), "..", "config", "foreup_config.json"
-        )
-        credentials_path = os.path.join(
-            os.path.dirname(__file__), "..", "config", "credentials.json"
-        )
+        config_path = "config/foreup_config.json"
+        credentials_path = "config/credentials.json"
 
         # Create monitor
-        monitor = PlaywrightForeUpMonitor(config_path, credentials_path, headless=True)
+        monitor = LambdaForeUpMonitor(config_path, credentials_path)
 
         # Perform single check
         check_result = monitor.check_availability()
@@ -40,6 +35,17 @@ def lambda_handler(event, context):
         # Log metrics
         monitor.log_metrics(check_result)
 
+        # Convert TeeTime objects to dictionaries for JSON serialization
+        available_times = []
+        for tee_time in check_result.available_times:
+            available_times.append(
+                {
+                    "time": tee_time.time,
+                    "available_spots": tee_time.available_spots,
+                    "price": tee_time.price,
+                }
+            )
+
         # Return result
         return {
             "statusCode": 200,
@@ -47,10 +53,10 @@ def lambda_handler(event, context):
                 {
                     "success": check_result.success,
                     "date": check_result.date,
-                    "available_times": check_result.available_times,
+                    "available_times": available_times,
                     "total_available": check_result.total_available,
                     "timestamp": check_result.timestamp.isoformat(),
-                    "message": "Playwright monitoring completed successfully"
+                    "message": "Lambda monitoring completed successfully"
                     if check_result.success
                     else check_result.error_message,
                 }

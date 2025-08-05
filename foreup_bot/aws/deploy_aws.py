@@ -204,6 +204,19 @@ class AWSDeployer:
                 else:
                     raise Exception("lambda_handler.py not found in aws directory")
 
+                # Add monitoring directory
+                monitoring_dir = os.path.join(source_dir, "monitoring")
+                if os.path.exists(monitoring_dir):
+                    for root, dirs, files in os.walk(monitoring_dir):
+                        for file in files:
+                            if file.endswith(".py"):
+                                file_path = os.path.join(root, file)
+                                arc_name = os.path.relpath(file_path, source_dir)
+                                zipf.write(file_path, arc_name)
+                                self.logger.info(f"Added to package: {arc_name}")
+                else:
+                    raise Exception("monitoring directory not found")
+
                 # Add requirements.txt from parent directory
                 requirements_path = os.path.join(
                     os.path.dirname(source_dir), "requirements.txt"
@@ -243,15 +256,17 @@ class AWSDeployer:
 
                     self.logger.info("Added Python dependencies to package")
 
-                # Add credentials file
-                credentials_path = os.path.join(
-                    source_dir, "config", "credentials.json"
-                )
-                if os.path.exists(credentials_path):
-                    zipf.write(credentials_path, "credentials.json")
-                    self.logger.info("Added to package: credentials.json")
+                # Add config directory
+                config_dir = os.path.join(source_dir, "config")
+                if os.path.exists(config_dir):
+                    for file in os.listdir(config_dir):
+                        if file.endswith(".json"):
+                            file_path = os.path.join(config_dir, file)
+                            arc_name = os.path.join("config", file)
+                            zipf.write(file_path, arc_name)
+                            self.logger.info(f"Added to package: {arc_name}")
                 else:
-                    self.logger.warning("Credentials file not found, Lambda may fail")
+                    self.logger.warning("Config directory not found, Lambda may fail")
 
             # Verify the package is not empty
             if os.path.getsize(output_path) < 100:
@@ -351,58 +366,6 @@ class AWSDeployer:
 
         except Exception as e:
             self.logger.error(f"Failed to deploy Lambda function: {str(e)}")
-            raise
-
-    def create_lambda_layer(self) -> str:
-        """Create Lambda layer with Chrome and ChromeDriver."""
-        try:
-            # Import the layer creation function
-            from create_lambda_layer import create_lambda_layer
-
-            layer_path = create_lambda_layer()
-            if not layer_path:
-                raise Exception("Failed to create Lambda layer")
-
-            # Upload layer to AWS
-            layer_name = "ForeUpMonitorChromeLayer"
-            with open(layer_path, "rb") as f:
-                response = self.lambda_client.publish_layer_version(
-                    LayerName=layer_name,
-                    Description="Chrome and ChromeDriver for ForeUp monitoring",
-                    Content={"ZipFile": f.read()},
-                    CompatibleRuntimes=["python3.9"],
-                    CompatibleArchitectures=["x86_64"],
-                )
-
-            layer_arn = response["LayerVersionArn"]
-            self.logger.info(f"Created Lambda layer: {layer_arn}")
-            return layer_arn
-
-        except Exception as e:
-            self.logger.error(f"Failed to create Lambda layer: {str(e)}")
-            raise
-
-    def attach_layer_to_function(self, function_name: str, layer_arn: str) -> None:
-        """Attach layer to Lambda function."""
-        try:
-            # Get current function configuration
-            response = self.lambda_client.get_function(FunctionName=function_name)
-            current_layers = response["Configuration"].get("Layers", [])
-
-            # Add new layer
-            new_layers = [layer["Arn"] for layer in current_layers]
-            if layer_arn not in new_layers:
-                new_layers.append(layer_arn)
-
-            # Update function configuration
-            self.lambda_client.update_function_configuration(
-                FunctionName=function_name, Layers=new_layers
-            )
-
-            self.logger.info(f"Attached layer to function: {layer_arn}")
-
-        except Exception as e:
-            self.logger.error(f"Failed to attach layer: {str(e)}")
             raise
 
     def create_eventbridge_rule(
@@ -508,18 +471,11 @@ class AWSDeployer:
             # Deploy Lambda function
             function_name = "ForeUpMonitor"
             resources["function_arn"] = self.deploy_lambda_function(
-                function_name, resources["role_arn"], package_path
+                function_name,
+                resources["role_arn"],
+                package_path,
+                handler="lambda_handler_simple.lambda_handler",
             )
-
-            # Create and attach Lambda layer
-            try:
-                layer_arn = self.create_lambda_layer()
-                resources["layer_arn"] = layer_arn
-                self.attach_layer_to_function(function_name, layer_arn)
-                self.logger.info("Lambda layer created and attached successfully")
-            except Exception as e:
-                self.logger.warning(f"Failed to create Lambda layer: {str(e)}")
-                self.logger.info("Lambda function will use system Chrome if available")
 
             # Create EventBridge rule for periodic execution
             interval_minutes = config["monitoring"]["check_interval_minutes"]
@@ -579,28 +535,6 @@ class AWSDeployer:
             if "sns_topic_arn" in resources:
                 self.sns_client.delete_topic(TopicArn=resources["sns_topic_arn"])
                 self.logger.info("Deleted SNS topic")
-
-            # Delete Lambda layer
-            if "layer_arn" in resources:
-                layer_name = "ForeUpMonitorChromeLayer"
-                try:
-                    response = self.lambda_client.list_layer_versions(
-                        LayerName=layer_name
-                    )
-                    if response["LayerVersions"]:
-                        latest_version = response["LayerVersions"][0]["Version"]
-                        self.lambda_client.delete_layer_version(
-                            LayerName=layer_name, VersionNumber=latest_version
-                        )
-                        self.logger.info(
-                            f"Deleted Lambda layer version {latest_version}"
-                        )
-                except self.lambda_client.exceptions.ResourceNotFoundException:
-                    self.logger.info(
-                        f"Lambda layer {layer_name} not found, skipping deletion."
-                    )
-                except Exception as e:
-                    self.logger.error(f"Failed to delete Lambda layer: {str(e)}")
 
             self.logger.info("Cleanup completed successfully!")
 

@@ -7,7 +7,7 @@
     "monitoring": {
         "aws_region": "us-east-1",
         "check_interval_minutes": 15,
-        "sns_topic_arn": "arn:aws:sns:us-east-1:831372995959:foreup-monitoring-us-east-1",
+        "sns_topic_arn": "arn:aws:sns:us-east-1:245706660322:foreup-monitoring-us-east-1",
         "notification_email": "joshcharest1@gmail.com"
     }
 }
