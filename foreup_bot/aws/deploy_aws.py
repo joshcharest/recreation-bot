@@ -222,9 +222,9 @@ class AWSDeployer:
                         [
                             "pip",
                             "install",
-                            "selenium==4.18.1",
-                            "boto3>=1.34.0",
                             "requests>=2.31.0",
+                            "beautifulsoup4>=4.12.0",
+                            "boto3>=1.34.0",
                             "-t",
                             temp_dir,
                             "--platform",
@@ -511,12 +511,15 @@ class AWSDeployer:
                 function_name, resources["role_arn"], package_path
             )
 
-            # Note: Lambda layer creation is complex and requires additional setup
-            # For now, the Lambda will use system Chrome if available
-            self.logger.info("Lambda layer creation skipped - using system Chrome")
-            self.logger.info(
-                "For full Chrome support, manually create and attach a Lambda layer"
-            )
+            # Create and attach Lambda layer
+            try:
+                layer_arn = self.create_lambda_layer()
+                resources["layer_arn"] = layer_arn
+                self.attach_layer_to_function(function_name, layer_arn)
+                self.logger.info("Lambda layer created and attached successfully")
+            except Exception as e:
+                self.logger.warning(f"Failed to create Lambda layer: {str(e)}")
+                self.logger.info("Lambda function will use system Chrome if available")
 
             # Create EventBridge rule for periodic execution
             interval_minutes = config["monitoring"]["check_interval_minutes"]

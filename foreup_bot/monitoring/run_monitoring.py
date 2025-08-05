@@ -13,7 +13,7 @@ import sys
 # Add the monitoring directory to the path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from monitoring_service import ForeUpMonitor
+from playwright_monitor import PlaywrightForeUpMonitor
 
 
 def setup_logging():
@@ -47,7 +47,7 @@ def main():
         )
 
         # Initialize monitor (headless for local monitoring)
-        monitor = ForeUpMonitor(
+        monitor = PlaywrightForeUpMonitor(
             config_path=config_path,
             credentials_path=credentials_path,
             headless=True,  # Run headless for local monitoring
@@ -58,9 +58,6 @@ def main():
         check_result = monitor.check_availability()
 
         if check_result.success:
-            logger.info(
-                f"Initial check successful: {check_result.total_available} times available"
-            )
             if check_result.available_times:
                 logger.info("Available times:")
                 for time_slot in check_result.available_times:
@@ -107,9 +104,6 @@ def main():
                 check_result = monitor.check_availability()
 
                 if check_result.success:
-                    print(
-                        f"Check completed: {check_result.total_available} times available"
-                    )
                     if check_result.available_times:
                         print("Available times:")
                         for time_slot in check_result.available_times:
