@@ -1,5 +1,7 @@
 import json
 import logging
+import os
+import sys
 import time
 from datetime import datetime
 
@@ -34,14 +36,36 @@ class ForeUpBot:
         self.credentials = self._load_config(credentials_path)
         self.base_url = "https://foreupsoftware.com/index.php/booking/19348/1470"
         options = webdriver.ChromeOptions()
+        # Explicitly set Chrome binary path
+        options.binary_location = "/usr/bin/google-chrome"
         if headless:
             options.add_argument("--headless=new")
             options.add_argument("--disable-gpu")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
 
-        service = Service(ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=service, options=options)
+        try:
+            # Force download of the correct ChromeDriver version
+            driver_path = ChromeDriverManager().install()
+            # Fix the path if it points to the wrong file
+            if "THIRD_PARTY_NOTICES.chromedriver" in driver_path:
+                driver_path = driver_path.replace(
+                    "THIRD_PARTY_NOTICES.chromedriver", "chromedriver"
+                )
+            self.logger.info(f"ChromeDriver path: {driver_path}")
+            service = Service(driver_path)
+            self.driver = webdriver.Chrome(service=service, options=options)
+        except Exception as e:
+            self.logger.error(f"Failed to initialize Chrome driver: {e}")
+            # Try alternative approach without service
+            try:
+                self.logger.info("Trying alternative Chrome driver initialization...")
+                self.driver = webdriver.Chrome(options=options)
+            except Exception as e2:
+                self.logger.error(
+                    f"Alternative Chrome driver initialization failed: {e2}"
+                )
+                raise
         self.driver.maximize_window()
         self.wait = WebDriverWait(self.driver, 60)
 
@@ -65,6 +89,20 @@ class ForeUpBot:
         Returns:
             dict: Configuration dictionary
         """
+        # Convert relative path to absolute path if needed
+        if not os.path.isabs(config_path):
+            # Get the directory where this script is located
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            # Resolve the path relative to the script directory
+            config_path = os.path.join(script_dir, config_path)
+
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(
+                f"Configuration file not found: {config_path}\n"
+                f"Please ensure the file exists and you're running the script from the correct directory.\n"
+                f"Expected location: {config_path}"
+            )
+
         with open(config_path) as f:
             return json.load(f)
 
@@ -315,9 +353,6 @@ class ForeUpBot:
 
 if __name__ == "__main__":
     # Show config GUI first
-    import os
-    import sys
-
     # Add the core directory to the path for imports
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
