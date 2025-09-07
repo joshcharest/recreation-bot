@@ -1,7 +1,7 @@
 {
-    "target_date": "08-31-2025",
+    "target_date": "09-13-2025",
     "num_players": 4,
-    "start_time": "06:00 AM",
-    "window_start_time": "08:00 AM",
-    "window_end_time": "12:00 PM"
+    "start_time": "07:00 AM",
+    "window_start_time": "06:00 AM",
+    "window_end_time": "11:00 PM"
 }
